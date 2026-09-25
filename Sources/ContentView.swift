@@ -16,6 +16,7 @@ private struct CutoutButtonStyle: ButtonStyle {
             .font(.system(size: 13))
             .padding(.horizontal, 12)
             .frame(height: height)
+            .contentShape(Rectangle())
             .foregroundStyle(primary ? Color.white : ink)
             .background(primary ? Color.black : (raised ? surface : Color.clear), in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(ink.opacity(raised ? 0.12 : 0), lineWidth: 1))
