@@ -41,7 +41,9 @@ opt-out are always enabled. There is no HTTP server or upload path.
 
 Defaults to **ZhengPeng7/BiRefNet** segmentation for solid products. The top-right
 selector switches to **ZhengPeng7/BiRefNet-matting** for soft edges. Switching
-reprocesses the current image and preserves its crop. The selector is disabled
+processes each mode once per image and preserves the crop. Completed mode results
+are reused immediately. Cancelling a mode switch restores the last completed
+result; importing another image clears both cached results. The selector is disabled
 while processing or editing a crop. Each launch starts with Segmentation.
 Both checkpoints are bundled offline; only one is loaded in memory at a time.
 Both run at 1024 × 1024 with ImageNet normalization.

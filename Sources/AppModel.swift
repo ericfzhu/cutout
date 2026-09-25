@@ -49,6 +49,8 @@ final class AppModel: ObservableObject {
     private var requestID: UUID?
     private var sourceURL: URL?
     private var resultURL: URL?
+    private var completedResults: [RemovalMode: URL] = [:]
+    private var lastCompletedMode: RemovalMode?
     private var activeFolder: URL?
     private var watchdog: Task<Void, Never>?
     private var copyFeedback: Task<Void, Never>?
@@ -156,7 +158,9 @@ final class AppModel: ObservableObject {
                 if let activeFolder { try? FileManager.default.removeItem(at: activeFolder) }
                 activeFolder = folder
                 sourceURL = source
-                resultURL = folder.appendingPathComponent("cutout.png")
+                resultURL = nil
+                completedResults.removeAll()
+                lastCompletedMode = nil
                 original = NSImage(contentsOf: source)
                 result = nil
                 showOriginal = false
@@ -177,10 +181,13 @@ final class AppModel: ObservableObject {
     }
 
     private func run(id: UUID) throws {
-        guard let sourceURL, let resultURL else { return }
+        guard let sourceURL, let activeFolder else { return }
+        // A cancelled worker can finish writing late; never reuse its destination.
+        let destination = activeFolder.appendingPathComponent("\(removalMode.rawValue)-\(id.uuidString).png")
+        resultURL = destination
         busy = true
         status = "Starting background remover…"
-        try worker.submit(id: id, source: sourceURL, destination: resultURL, mode: removalMode)
+        try worker.submit(id: id, source: sourceURL, destination: destination, mode: removalMode)
         watchdog?.cancel()
         watchdog = Task { [weak self] in
             try? await Task.sleep(for: .seconds(300))
@@ -193,8 +200,10 @@ final class AppModel: ObservableObject {
     func selectMode(_ mode: RemovalMode) {
         guard !busy, !cropping, mode != removalMode else { return }
         removalMode = mode
-        // Do not allow export of a previous mode’s result after cancellation/failure.
+        error = nil
+        if restoreResult(for: mode) { return }
         result = nil
+        resultURL = nil
         copied = false
         showOriginal = false
         if sourceURL != nil { retry() }
@@ -203,9 +212,23 @@ final class AppModel: ObservableObject {
     func retry() {
         guard !busy, sourceURL != nil else { return }
         error = nil
+        if restoreResult(for: removalMode) { return }
         let id = UUID()
         requestID = id
         do { try run(id: id) } catch { fail(error.localizedDescription) }
+    }
+
+    @discardableResult
+    private func restoreResult(for mode: RemovalMode) -> Bool {
+        guard let url = completedResults[mode], let image = NSImage(contentsOf: url) else { return false }
+        removalMode = mode
+        resultURL = url
+        result = image
+        lastCompletedMode = mode
+        showOriginal = false
+        copied = false
+        status = "Background removed"
+        return true
     }
 
     private func receive(_ event: [String: Any]) {
@@ -216,6 +239,8 @@ final class AppModel: ObservableObject {
             guard let resultURL, let image = NSImage(contentsOf: resultURL) else {
                 fail("The finished image couldn’t be opened. Please try again."); return
             }
+            completedResults[removalMode] = resultURL
+            lastCompletedMode = removalMode
             result = image
             busy = false
             watchdog?.cancel()
@@ -235,6 +260,7 @@ final class AppModel: ObservableObject {
         busy = false
         status = ""
         error = message
+        if let lastCompletedMode { restoreResult(for: lastCompletedMode) }
     }
 
     func cancel() {
@@ -243,6 +269,7 @@ final class AppModel: ObservableObject {
         worker.stop()
         busy = false
         status = "Cancelled"
+        if let lastCompletedMode { restoreResult(for: lastCompletedMode) }
     }
 
     func clear() {
@@ -251,6 +278,8 @@ final class AppModel: ObservableObject {
         result = nil
         sourceURL = nil
         resultURL = nil
+        completedResults.removeAll()
+        lastCompletedMode = nil
         filename = ""
         exportFilename = "cutout.png"
         cropping = false

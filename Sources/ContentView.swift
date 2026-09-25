@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 private let ink = Color(nsColor: .labelColor)
 private let surface = Color(nsColor: .controlBackgroundColor)
+private let compactControlHeight: CGFloat = 30
 
 private struct CutoutButtonStyle: ButtonStyle {
     var primary = false
@@ -65,7 +66,7 @@ struct ContentView: View {
         ToolbarItem(placement: .navigation) {
             if model.original != nil {
                 Button("Open New Image", action: model.chooseImage)
-                    .buttonStyle(CutoutButtonStyle(primary: true, height: 30))
+                    .buttonStyle(CutoutButtonStyle(primary: true, height: compactControlHeight))
                     .disabled(model.busy || model.cropping)
                     .help("Open new image (⌘O)")
             }
@@ -104,11 +105,15 @@ struct ContentView: View {
             VStack {
                 Spacer()
                 VStack(spacing: 8) {
-                    Text(model.outputDimensions)
-                        .font(.system(size: 11)).monospacedDigit()
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel("Image dimensions: " + model.outputDimensions)
-                    dock
+                    if !model.busy && model.result == nil {
+                        recoveryActions
+                    } else {
+                        Text(model.outputDimensions)
+                            .font(.system(size: 11)).monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("Image dimensions: " + model.outputDimensions)
+                        dock
+                    }
                 }
                 .padding(.bottom, 24)
             }
@@ -122,7 +127,7 @@ struct ContentView: View {
                     Button { model.selectMode(mode) } label: {
                         Text(mode.title)
                             .font(.system(size: 13))
-                            .frame(width: 102, height: 24)
+                            .frame(width: 102, height: compactControlHeight - 6)
                             .background(
                                 model.removalMode == mode ? ink.opacity(0.10) : Color.clear,
                                 in: RoundedRectangle(cornerRadius: 5)
@@ -137,6 +142,7 @@ struct ContentView: View {
                 }
             }
             .padding(3)
+            .frame(height: compactControlHeight)
             .background(surface, in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(ink.opacity(0.12)))
             .disabled(model.busy || model.cropping)
@@ -152,7 +158,7 @@ struct ContentView: View {
                 Button { model.showOriginal = original } label: {
                     Text(original ? "Original" : "Cutout")
                         .font(.system(size: 13))
-                        .frame(width: 68, height: 30)
+                        .frame(width: 68, height: compactControlHeight - 6)
                         .background(
                             model.showOriginal == original ? ink.opacity(0.10) : Color.clear,
                             in: RoundedRectangle(cornerRadius: 5)
@@ -164,12 +170,25 @@ struct ContentView: View {
             }
         }
         .padding(3)
+        .frame(height: compactControlHeight)
         .background(surface, in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(ink.opacity(0.12)))
         .disabled(model.cropping)
         .opacity(model.cropping ? 0.4 : 1)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Image preview")
+    }
+
+    private var recoveryActions: some View {
+        VStack(spacing: 10) {
+            Text(model.status == "Cancelled" ? "Background removal cancelled" : "Background removal didn’t finish")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            Button(action: model.retry) {
+                Label("Try Again", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(CutoutButtonStyle(primary: true))
+        }
     }
 
     private var dock: some View {
@@ -210,10 +229,6 @@ struct ContentView: View {
                     Button(action: model.save) { Label("Save PNG…", systemImage: "arrow.down.to.line") }
                         .buttonStyle(CutoutButtonStyle(primary: true))
                 }
-            } else {
-                Text(model.status.isEmpty ? "Try again or open another image" : model.status)
-                    .font(.system(size: 12)).padding(.leading, 8)
-                Button("Try Again", action: model.retry).buttonStyle(CutoutButtonStyle(primary: true))
             }
         }
         .padding(7)
