@@ -1,0 +1,18 @@
+device mps
+{"image": "boot", "variant": "matting", "seconds": 15.377, "peak_process_GiB": 1.721}
+{"image": "boot", "variant": "matting-roi", "seconds": 10.915, "peak_process_GiB": 1.721, "box": [309, 958, 1891, 2118]}
+{"image": "shirt", "variant": "matting", "seconds": 10.163, "peak_process_GiB": 1.756}
+{"image": "shirt", "variant": "matting-roi", "seconds": 10.277, "peak_process_GiB": 1.764, "box": [48, 295, 1378, 1606]}
+{"image": "boot", "variant": "segmentation", "seconds": 10.411, "peak_process_GiB": 1.835}
+{"image": "boot", "variant": "segmentation-roi", "seconds": 8.924, "peak_process_GiB": 1.835, "box": [309, 958, 1891, 2118]}
+{"image": "shirt", "variant": "segmentation", "seconds": 11.009, "peak_process_GiB": 1.835}
+{"image": "shirt", "variant": "segmentation-roi", "seconds": 11.362, "peak_process_GiB": 1.835, "box": [48, 295, 1378, 1606]}
+/Users/eric/Documents/Github/Cutout/Runtime/site-packages/torch/nn/functional.py:4594: UserWarning: The operator 'aten::upsample_bicubic2d.out' is not currently supported on the MPS backend and will fall back to run on the CPU. This may have performance implications. (Triggered internally at /Users/runner/work/pytorch/pytorch/pytorch/aten/src/ATen/mps/MPSFallback.mm:13.)
+  return torch._C._nn.upsample_bicubic2d(
+{"image": "boot", "variant": "matting-vitmatte", "seconds": 4.25, "peak_process_GiB": 1.835, "refinement_size": [1024, 1024]}
+{"image": "boot", "variant": "segmentation-vitmatte", "seconds": 0.589, "peak_process_GiB": 1.835, "refinement_size": [1024, 1024]}
+{"image": "boot", "variant": "segmentation-roi-vitmatte", "seconds": 0.581, "peak_process_GiB": 1.835, "refinement_size": [1024, 1024]}
+{"image": "shirt", "variant": "matting-vitmatte", "seconds": 0.965, "peak_process_GiB": 1.835, "refinement_size": [732, 1024]}
+{"image": "shirt", "variant": "segmentation-vitmatte", "seconds": 0.387, "peak_process_GiB": 1.835, "refinement_size": [732, 1024]}
+{"image": "shirt", "variant": "segmentation-roi-vitmatte", "seconds": 0.381, "peak_process_GiB": 1.835, "refinement_size": [732, 1024]}
+COMPLETE

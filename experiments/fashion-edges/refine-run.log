@@ -1,0 +1,4 @@
+/Users/eric/Documents/Github/Cutout/Runtime/site-packages/torch/nn/functional.py:4594: UserWarning: The operator 'aten::upsample_bicubic2d.out' is not currently supported on the MPS backend and will fall back to run on the CPU. This may have performance implications. (Triggered internally at /Users/runner/work/pytorch/pytorch/pytorch/aten/src/ATen/mps/MPSFallback.mm:13.)
+  return torch._C._nn.upsample_bicubic2d(
+{"image": "boot", "variant": "segmentation-roi-vitmatte-detail", "seconds": 2.477, "refinement_size": [1536, 1126]}
+{"image": "shirt", "variant": "segmentation-roi-vitmatte-detail", "seconds": 1.462, "refinement_size": [1330, 1311]}
