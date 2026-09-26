@@ -5,11 +5,17 @@ private let ink = Color(nsColor: .labelColor)
 private let surface = Color(nsColor: .controlBackgroundColor)
 private let compactControlHeight: CGFloat = 30
 
+private final class ControlInteraction: ObservableObject {
+    @Published var hovered = false
+    @Published var showingModeHelp = false
+}
+
 private struct CutoutButtonStyle: ButtonStyle {
     var primary = false
     var raised = false
     var height: CGFloat = 36
     @Environment(\.isEnabled) private var enabled
+    @StateObject private var interaction = ControlInteraction()
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -19,13 +25,16 @@ private struct CutoutButtonStyle: ButtonStyle {
             .contentShape(Rectangle())
             .foregroundStyle(primary ? Color.white : ink)
             .background(primary ? Color.black : (raised ? surface : Color.clear), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).fill((primary ? Color.white : ink).opacity(enabled && interaction.hovered ? 0.07 : 0)).allowsHitTesting(false))
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(ink.opacity(raised ? 0.12 : 0), lineWidth: 1))
             .opacity(!enabled ? 0.4 : configuration.isPressed ? 0.65 : 1)
+            .onHover { interaction.hovered = $0 }
     }
 }
 
 struct ContentView: View {
     @ObservedObject var model: AppModel
+    @StateObject private var interaction = ControlInteraction()
 
     var body: some View {
         ZStack {
@@ -86,7 +95,7 @@ struct ContentView: View {
             Text(model.busy ? "Preparing your image…" : "Drop an image here")
                 .font(.system(size: 23, weight: .medium))
             Button("Open Image…", action: model.chooseImage)
-                .buttonStyle(CutoutButtonStyle(primary: true))
+                .buttonStyle(CutoutButtonStyle(primary: true, height: compactControlHeight))
                 .disabled(model.busy)
             Text("or paste with ⌘V").font(.system(size: 12)).foregroundStyle(.secondary)
         }
@@ -150,6 +159,30 @@ struct ContentView: View {
             .opacity(model.busy || model.cropping ? 0.4 : 1)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Background removal mode")
+            Button { interaction.showingModeHelp.toggle() } label: {
+                Image(systemName: "questionmark.circle")
+            }
+            .buttonStyle(CutoutButtonStyle(height: compactControlHeight))
+            .help("Choosing a removal mode")
+            .accessibilityLabel("Choosing a removal mode")
+            .popover(isPresented: $interaction.showingModeHelp) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Choosing a removal mode").font(.headline)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Segmentation").fontWeight(.medium)
+                        Text("Start here for solid objects, clothing, and shoes.")
+                            .foregroundStyle(.secondary)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Matting").fontWeight(.medium)
+                        Text("Try this for hair, soft edges, and translucent details.")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .font(.system(size: 13))
+                .padding(18)
+                .frame(width: 280, alignment: .leading)
+            }
         }
     }
 
@@ -205,6 +238,7 @@ struct ContentView: View {
             } else if model.result != nil {
                 previewSelector
                 backgrounds
+                    .padding(.leading, 8)
                 Divider().frame(height: 23).padding(.horizontal, 5)
                 if model.cropping {
                     Button("Reset") { model.draftCrop = CropGeometry.full }
@@ -215,7 +249,7 @@ struct ContentView: View {
                         .buttonStyle(CutoutButtonStyle(primary: true))
                 } else {
                     if model.crop != CropGeometry.full {
-                        Button(action: model.resetCrop) { Image(systemName: "arrow.uturn.backward") }
+                        Button(action: model.resetCrop) { Label("Reset", systemImage: "arrow.uturn.backward") }
                             .buttonStyle(CutoutButtonStyle())
                             .help("Reset crop").accessibilityLabel("Reset crop")
                     }
@@ -224,6 +258,7 @@ struct ContentView: View {
                         model.beginCrop()
                     }) { Label("Crop", systemImage: "crop") }
                         .buttonStyle(CutoutButtonStyle())
+                    Divider().frame(height: 23).padding(.horizontal, 5)
                     Button(action: model.copyResult) {
                         Label(model.copied ? "Copied" : "Copy", systemImage: model.copied ? "checkmark" : "doc.on.doc")
                     }.buttonStyle(CutoutButtonStyle())
