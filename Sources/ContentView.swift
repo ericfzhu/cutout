@@ -258,7 +258,6 @@ struct ContentView: View {
                         model.beginCrop()
                     }) { Label("Crop", systemImage: "crop") }
                         .buttonStyle(CutoutButtonStyle())
-                    Divider().frame(height: 23).padding(.horizontal, 5)
                     Button(action: model.copyResult) {
                         Label(model.copied ? "Copied" : "Copy", systemImage: model.copied ? "checkmark" : "doc.on.doc")
                     }.buttonStyle(CutoutButtonStyle())
