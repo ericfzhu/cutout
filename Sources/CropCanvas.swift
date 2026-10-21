@@ -5,11 +5,12 @@ struct CropCanvas: NSViewRepresentable {
     let image: NSImage
     let editing: Bool
     let crop: CGRect
+    @ObservedObject var viewport: CanvasViewport
     let onChange: (CGRect) -> Void
 
     func makeNSView(context: Context) -> CropImageView { CropImageView() }
     func updateNSView(_ view: CropImageView, context: Context) {
-        view.configure(image: image, editing: editing, crop: crop, onChange: onChange)
+        view.configure(image: image, editing: editing, crop: crop, viewport: viewport, onChange: onChange)
     }
 }
 
@@ -21,19 +22,23 @@ final class CropImageView: NSView {
     private var crop = CropGeometry.full
     private var onChange: ((CGRect) -> Void)?
     private var dragOrigin: CGPoint?
+    private var viewport: CanvasViewport?
+    private var panOrigin: CGPoint?
+    private var initialOffset = CGPoint.zero
     private var initialCrop = CropGeometry.full
     private var mode = (horizontal: 0, vertical: 0, creating: false)
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-    func configure(image: NSImage, editing: Bool, crop: CGRect, onChange: @escaping (CGRect) -> Void) {
+    func configure(image: NSImage, editing: Bool, crop: CGRect, viewport: CanvasViewport, onChange: @escaping (CGRect) -> Void) {
         let changed = sourceImage !== image || self.crop != crop || self.editing != editing
         if sourceImage !== image {
             sourceImage = image
             sourcePixels = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
         }
         self.editing = editing
+        self.viewport = viewport
         self.crop = crop
         self.onChange = onChange
         if changed, let sourcePixels {
@@ -43,18 +48,20 @@ final class CropImageView: NSView {
                 displayedImage = NSImage(cgImage: pixels, size: NSSize(width: pixels.width, height: pixels.height))
             }
         }
-        setAccessibilityLabel(editing ? "Crop image. Drag the corners or edges to resize, or drag inside to move." : "Image preview")
+        setAccessibilityLabel(editing ? "Crop image. Drag the corners or edges to resize, or drag inside to move." : "Image preview. Pinch to zoom. Drag or scroll to pan when zoomed. Use Fit to show the whole image.")
         needsDisplay = true
         window?.invalidateCursorRects(for: self)
     }
 
+    // Reserve room when fitting, but draw and receive gestures across the full canvas.
+    private var fitBounds: CGRect { CanvasViewport.fittingBounds(in: bounds) }
+
     private var imageRect: CGRect {
         guard let image = displayedImage else { return .zero }
-        let available = bounds.insetBy(dx: editing ? 20 : 12, dy: editing ? 20 : 12)
-        let scale = max(0, min(available.width / image.size.width, available.height / image.size.height))
-        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-        return CGRect(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2,
-                      width: size.width, height: size.height)
+        return CanvasViewport.imageRect(size: image.size, bounds: fitBounds,
+                                        zoom: editing ? 1 : (viewport?.zoom ?? 1),
+                                        offset: editing ? .zero : (viewport?.offset ?? .zero),
+                                        inset: editing ? 20 : 12)
     }
 
     private func screenRect(_ unit: CGRect) -> CGRect {
@@ -65,6 +72,7 @@ final class CropImageView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let image = displayedImage else { return }
+        NSBezierPath(rect: bounds).addClip()
         NSGraphicsContext.current?.imageInterpolation = .high
         image.draw(in: imageRect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
         guard editing else { return }
@@ -110,7 +118,10 @@ final class CropImageView: NSView {
     }
 
     override func resetCursorRects() {
-        guard editing else { return }
+        guard editing else {
+            if (viewport?.zoom ?? 1) > 1 { addCursorRect(bounds, cursor: .openHand) }
+            return
+        }
         addCursorRect(imageRect, cursor: .crosshair)
         addCursorRect(screenRect(crop).insetBy(dx: 10, dy: 10), cursor: .openHand)
         for (point, x, y) in handles {
@@ -120,7 +131,15 @@ final class CropImageView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        guard editing else { return }
+        guard editing else {
+            if (viewport?.zoom ?? 1) > 1 {
+                window?.makeFirstResponder(self)
+                panOrigin = convert(event.locationInWindow, from: nil)
+                initialOffset = CGPoint(x: imageRect.midX - fitBounds.midX, y: imageRect.midY - fitBounds.midY)
+                NSCursor.closedHand.set()
+            }
+            return
+        }
         let point = convert(event.locationInWindow, from: nil)
         guard imageRect.insetBy(dx: -10, dy: -10).contains(point) else { return }
         window?.makeFirstResponder(self)
@@ -136,6 +155,11 @@ final class CropImageView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        if !editing, let origin = panOrigin {
+            let point = convert(event.locationInWindow, from: nil)
+            pan(to: CGPoint(x: initialOffset.x + point.x - origin.x, y: initialOffset.y + point.y - origin.y))
+            return
+        }
         guard editing, let origin = dragOrigin, imageRect.width > 0, imageRect.height > 0 else { return }
         let point = convert(event.locationInWindow, from: nil)
         let frame = imageRect
@@ -157,5 +181,32 @@ final class CropImageView: NSView {
         onChange?(next)
     }
 
-    override func mouseUp(with event: NSEvent) { dragOrigin = nil }
+    override func mouseUp(with event: NSEvent) {
+        dragOrigin = nil
+        panOrigin = nil
+        window?.invalidateCursorRects(for: self)
+    }
+
+    private func pan(to offset: CGPoint) {
+        guard let viewport, let image = displayedImage else { return }
+        let rect = CanvasViewport.imageRect(size: image.size, bounds: fitBounds, zoom: viewport.zoom, offset: offset)
+        viewport.offset = CGPoint(x: rect.midX - fitBounds.midX, y: rect.midY - fitBounds.midY)
+        needsDisplay = true
+    }
+
+    override func magnify(with event: NSEvent) {
+        guard !editing, let viewport else { return }
+        let point = convert(event.locationInWindow, from: nil)
+        viewport.offset = CGPoint(x: imageRect.midX - fitBounds.midX, y: imageRect.midY - fitBounds.midY)
+        viewport.magnify(by: 1 + event.magnification,
+                         anchor: CGPoint(x: point.x - fitBounds.midX, y: point.y - fitBounds.midY))
+        pan(to: viewport.offset)
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        guard !editing, let viewport, viewport.zoom > 1 else { super.scrollWheel(with: event); return }
+        let multiplier: CGFloat = event.hasPreciseScrollingDeltas ? 1 : 12
+        pan(to: CGPoint(x: imageRect.midX - fitBounds.midX + event.scrollingDeltaX * multiplier,
+                        y: imageRect.midY - fitBounds.midY + event.scrollingDeltaY * multiplier))
+    }
 }

@@ -20,6 +20,10 @@ struct ImageFilesTests {
         let encoder = CGImageDestinationCreateWithData(data, UTType.tiff.identifier as CFString, 1, nil)!
         CGImageDestinationAddImage(encoder, image, [kCGImagePropertyOrientation: 6] as CFDictionary)
         precondition(CGImageDestinationFinalize(encoder))
+        let preview = ImageFiles.quickPreview(data as Data)!
+        precondition(preview.width == 20 && preview.height == 40, "Quick preview must apply EXIF orientation")
+        precondition(preview.alphaInfo != .none, "Quick preview must retain transparency")
+        precondition(ImageFiles.quickPreview(Data("not an image".utf8)) == nil)
         let size = try ImageFiles.normalize(data as Data, to: output)
         precondition(size.0 == 20 && size.1 == 40, "EXIF orientation was not applied")
         let source = CGImageSourceCreateWithURL(output as CFURL, nil)!

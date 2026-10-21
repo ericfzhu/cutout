@@ -34,12 +34,13 @@ private struct CutoutButtonStyle: ButtonStyle {
 
 struct ContentView: View {
     @ObservedObject var model: AppModel
+    @StateObject private var viewport = CanvasViewport()
     @StateObject private var interaction = ControlInteraction()
 
     var body: some View {
         ZStack {
             previewBackdrop.ignoresSafeArea()
-            if model.original == nil { emptyState }
+            if model.original == nil && model.importPreview == nil { emptyState }
             else { preview }
         }
         .toolbar {
@@ -57,6 +58,10 @@ struct ContentView: View {
         }
         .toolbarBackground(.hidden, for: .windowToolbar)
         .tint(ink)
+        .onChange(of: model.original) { _, _ in viewport.fit() }
+        .onChange(of: model.importPreview) { _, _ in viewport.fit() }
+        .onChange(of: model.cropping) { _, _ in viewport.fit() }
+        .onChange(of: model.crop) { _, _ in viewport.fit() }
         .onDrop(of: [UTType.fileURL, UTType.image], isTargeted: $model.targeted, perform: model.acceptDrop)
         .overlay {
             if model.targeted && !model.busy {
@@ -104,13 +109,12 @@ struct ContentView: View {
 
     private var preview: some View {
         ZStack {
-            if let image = model.showOriginal ? model.original : (model.result ?? model.original) {
-                CropCanvas(image: image, editing: model.cropping,
-                           crop: model.cropping ? model.draftCrop : model.crop) {
+            if let image = model.importPreview ?? (model.showOriginal ? model.original : (model.result ?? model.original)) {
+                CropCanvas(image: image, editing: model.importPreview == nil && model.cropping,
+                           crop: model.importPreview != nil ? CropGeometry.full : (model.cropping ? model.draftCrop : model.crop), viewport: viewport) {
                     model.draftCrop = $0
                 }
                 .modifier(ProcessingPulse(active: model.busy))
-                .padding(.top, 12).padding(.bottom, 104)
             }
             VStack {
                 Spacer()
@@ -118,16 +122,45 @@ struct ContentView: View {
                     if !model.busy && model.result == nil {
                         recoveryActions
                     } else {
-                        Text(model.outputDimensions)
+                        if model.importPreview == nil {
+                            Text(model.outputDimensions)
                             .font(.system(size: 11)).monospacedDigit()
                             .foregroundStyle(.secondary)
                             .accessibilityLabel("Image dimensions: " + model.outputDimensions)
+                        }
+                        if !model.cropping { zoomControls }
                         dock
                     }
                 }
                 .padding(.bottom, 24)
             }
         }
+    }
+
+    private var zoomControls: some View {
+        HStack(spacing: 3) {
+            Button { viewport.magnify(by: 1 / 1.5) } label: { Image(systemName: "minus.magnifyingglass") }
+                .keyboardShortcut("-", modifiers: .command)
+                .disabled(viewport.zoom <= 1)
+                .help("Zoom out (⌘−)").accessibilityLabel("Zoom out")
+            Text(String(format: "%.1f×", viewport.zoom))
+                .font(.system(size: 11)).monospacedDigit().frame(width: 38)
+                .help("Magnification relative to Fit. Pinch to zoom; drag or scroll to pan.")
+                .accessibilityLabel("Magnification \(String(format: "%.1f", viewport.zoom)) times fit")
+            Button { viewport.magnify(by: 1.5) } label: { Image(systemName: "plus.magnifyingglass") }
+                .keyboardShortcut("=", modifiers: .command)
+                .disabled(viewport.zoom >= 16)
+                .help("Zoom in (⌘=)").accessibilityLabel("Zoom in")
+            Button("Fit") { viewport.fit() }
+                .keyboardShortcut("0", modifiers: .command)
+                .help("Fit image to window (⌘0)")
+                .accessibilityLabel("Fit image to window")
+        }
+        .buttonStyle(CutoutButtonStyle(height: compactControlHeight))
+        .padding(3)
+        .background(surface, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(ink.opacity(0.12)))
+        .disabled(model.busy)
     }
 
     private var titlebarControls: some View {

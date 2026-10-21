@@ -53,6 +53,13 @@ multiplied by any existing transparency. The source RGB content is preserved.
 The input's orientation and color profile are normalized to sRGB before inference.
 Exports are always transparent PNG, regardless of the preview background.
 
+To inspect edges, pinch to zoom or use the magnifier buttons (⌘= / ⌘−).
+Drag or scroll to pan while zoomed. Click **Fit** or press **⌘0** to show the
+whole image again. The zoom readout is relative to Fit, up to 16×. Switching
+Original/Cutout preserves the view; opening another image or entering crop mode
+resets it. Crop mode uses the fitted image so dragging edits the crop.
+Zoom and pan affect only the preview, never the exported dimensions.
+
 The Apple GPU uses PyTorch MPS when available; unsupported operations may run
 on the CPU. Metal uses FP16, with deformable convolutions explicitly computed
 in FP32 on the CPU to avoid a very slow CPU FP16 kernel. A CPU-only FP32 path

@@ -3,6 +3,21 @@ import ImageIO
 import UniformTypeIdentifiers
 
 enum ImageFiles {
+    /// A bounded, orientation-correct preview, decoded off the UI thread before PNG encoding.
+    static func quickPreview(_ data: Data) -> CGImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int,
+              width > 0, height > 0, width <= 40_000_000 / height else { return nil }
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 1600,
+            kCGImageSourceShouldCacheImmediately: true,
+        ] as CFDictionary)
+    }
+
     static func exportPNG(from sourceURL: URL, crop: CGRect) throws -> Data {
         if crop == CropGeometry.full { return try Data(contentsOf: sourceURL) }
         guard let source = CGImageSourceCreateWithURL(sourceURL as CFURL, nil),

@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 final class AppModel: ObservableObject {
     @Published private(set) var removalMode = RemovalMode.segmentation
     @Published var original: NSImage?
+    @Published private(set) var importPreview: NSImage?
     @Published var result: NSImage?
     @Published var busy = false
     @Published var status = ""
@@ -89,15 +90,23 @@ final class AppModel: ObservableObject {
     func open(_ url: URL) {
         guard !busy else { NSSound.beep(); return }
         guard url.isFileURL else { error = "Choose a file saved on your Mac."; return }
-        let access = url.startAccessingSecurityScopedResource()
-        defer { if access { url.stopAccessingSecurityScopedResource() } }
-        do {
+        let id = beginImport()
+        importFile(url, id: id)
+    }
+
+    private func importFile(_ url: URL, id: UUID) {
+        guard requestID == id, busy else { return }
+        guard url.isFileURL else { fail("Choose a file saved on your Mac."); return }
+        prepareImage(id: id, name: url.deletingPathExtension().lastPathComponent, hasFilename: true) {
+            // Security-scoped access must span the background read, not just task creation.
+            let access = url.startAccessingSecurityScopedResource()
+            defer { if access { url.stopAccessingSecurityScopedResource() } }
             let values = try url.resourceValues(forKeys: [.fileSizeKey])
             guard (values.fileSize ?? 0) <= 250_000_000 else {
                 throw CutoutError.message("This file is too large. Please use an image smaller than 250 MB.")
             }
-            importImage(try Data(contentsOf: url), name: url.deletingPathExtension().lastPathComponent, hasFilename: true)
-        } catch { self.error = error.localizedDescription }
+            return try Data(contentsOf: url)
+        }
     }
 
     func paste() {
@@ -117,21 +126,25 @@ final class AppModel: ObservableObject {
     func acceptDrop(_ providers: [NSItemProvider]) -> Bool {
         guard !busy else { return false }
         if let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }) {
+            let id = beginImport()
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { [weak self] item, _ in
                 let url = (item as? URL) ?? (item as? Data).flatMap { URL(dataRepresentation: $0, relativeTo: nil) }
                 Task { @MainActor in
-                    if let url { self?.open(url) }
-                    else { self?.error = "Couldn’t open the dropped file. Try Choose Image." }
+                    guard let self, self.requestID == id, self.busy else { return }
+                    if let url { self.importFile(url, id: id) }
+                    else { self.fail("Couldn’t open the dropped file. Try Open Image.") }
                 }
             }
             return true
         }
         if let provider = providers.first(where: { $0.canLoadObject(ofClass: NSImage.self) }) {
+            let id = beginImport()
             _ = provider.loadObject(ofClass: NSImage.self) { [weak self] image, _ in
                 let data = (image as? NSImage)?.tiffRepresentation
                 Task { @MainActor in
-                    if let data { self?.importImage(data, name: "Dropped image") }
-                    else { self?.error = "Couldn’t read the dropped image. Try Choose Image." }
+                    guard let self, self.requestID == id, self.busy else { return }
+                    if let data { self.prepareImage(id: id, name: "Dropped image") { data } }
+                    else { self.fail("Couldn’t read the dropped image. Try Open Image.") }
                 }
             }
             return true
@@ -139,17 +152,37 @@ final class AppModel: ObservableObject {
         return false
     }
 
-    private func importImage(_ data: Data, name: String, hasFilename: Bool = false) {
-        guard !busy else { return }
-        busy = true
-        error = nil
-        status = "Preparing image…"
+    /// Claim the import before waiting for a provider or touching the filesystem.
+    private func beginImport() -> UUID {
         let id = UUID()
         requestID = id
+        importPreview = nil
+        busy = true
+        targeted = false
+        error = nil
+        status = "Preparing image…"
+        return id
+    }
+
+    private func importImage(_ data: Data, name: String, hasFilename: Bool = false) {
+        guard !busy else { return }
+        prepareImage(id: beginImport(), name: name, hasFilename: hasFilename) { data }
+    }
+
+    private func prepareImage(id: UUID, name: String, hasFilename: Bool = false,
+                              loadData: @escaping @Sendable () throws -> Data) {
         let folder = sessionFolder.appendingPathComponent(id.uuidString)
         let source = folder.appendingPathComponent("input.png")
         Task {
             do {
+                let (data, preview) = try await Task.detached(priority: .userInitiated) {
+                    let data = try loadData()
+                    return (data, ImageFiles.quickPreview(data))
+                }.value
+                guard requestID == id else { return }
+                if let preview {
+                    importPreview = NSImage(cgImage: preview, size: NSSize(width: preview.width, height: preview.height))
+                }
                 let size = try await Task.detached(priority: .userInitiated) {
                     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
                     return try ImageFiles.normalize(data, to: source)
@@ -162,6 +195,7 @@ final class AppModel: ObservableObject {
                 completedResults.removeAll()
                 lastCompletedMode = nil
                 original = NSImage(contentsOf: source)
+                importPreview = nil
                 result = nil
                 showOriginal = false
                 copied = false
@@ -173,8 +207,8 @@ final class AppModel: ObservableObject {
                 dimensions = "\(size.0) × \(size.1)"
                 try run(id: id)
             } catch {
-                guard requestID == id else { return }
                 try? FileManager.default.removeItem(at: folder)
+                guard requestID == id else { return }
                 fail(error.localizedDescription)
             }
         }
@@ -256,6 +290,7 @@ final class AppModel: ObservableObject {
     }
 
     private func fail(_ message: String) {
+        importPreview = nil
         watchdog?.cancel()
         busy = false
         status = ""
@@ -264,6 +299,7 @@ final class AppModel: ObservableObject {
     }
 
     func cancel() {
+        importPreview = nil
         requestID = nil
         watchdog?.cancel()
         worker.stop()
