@@ -16,7 +16,7 @@ Drop, paste, or open an image, inspect the result, crop it, and copy or save it.
 Background removal runs locally with bundled models—no account, uploads,
 subscription, or separate Python installation.
 
-![Cutout showing a dog with its background removed on the graph-paper canvas, with mode selection, zoom, crop, copy, and save controls.](docs/assets/cutout-screenshot.png)
+![Cutout showing a dog with its background removed on the graph-paper canvas, with mode selection, zoom, crop, copy, and save controls.](docs/assets/cutout-screenshot.jpg)
 
 *Inspect a cutout against the graph-paper preview, then crop, copy, or save a
 transparent PNG. Sample photograph from [PyTorch Hub](https://github.com/pytorch/hub/blob/master/images/dog.jpg).*
