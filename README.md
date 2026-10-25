@@ -1,120 +1,101 @@
-# Cutout
+<p align="center">
+  <img src="docs/assets/cutout-icon.png" width="96" height="96" alt="Cutout app icon">
+</p>
 
-A personal, offline Mac app for automatic background removal. Drop an image,
-paste with ⌘V, or open with ⌘O. Processing starts automatically. Compare the
-original with the cutout, preview against white/dark/graph-paper backgrounds,
-then copy with ⌘C or save a transparent PNG with ⌘S.
+<h1 align="center">Cutout</h1>
+<p align="center">Remove image backgrounds. Keep everything on your Mac.</p>
+<p align="center">
+  <a href="https://github.com/ericfzhu/cutout/releases/latest">Download for Mac</a> ·
+  <a href="#using-cutout">Usage</a> ·
+  <a href="CHANGELOG.md">What's new</a> ·
+  <a href="docs/DEVELOPMENT.md">Build from source</a>
+</p>
 
-Use **Crop** after background removal. Drag a corner or edge to resize the frame,
-or drag inside it to move. **Done** applies the crop to the preview, clipboard
-and saved PNG. **Cancel** discards crop edits; **Reset Crop** restores the full
-image. Cropping is reversible and does not rerun the model. The dimensions
-above the bottom dock show the resulting export size.
+Cutout is a small native macOS app for turning images into transparent PNGs.
+Drop, paste, or open an image, inspect the result, crop it, and copy or save it.
+Background removal runs locally with bundled models—no account, uploads,
+subscription, or separate Python installation.
 
-## Run
+## Get Cutout
 
-Open `artifacts/Cutout.app`. You can drag the app into your Applications folder.
-It contains its own model and runtime: no Python installation, account,
-internet connection or localhost server is required to use it.
+Download **Cutout-1.0.0-macOS-arm64.zip** from the
+[latest release](https://github.com/ericfzhu/cutout/releases/latest), unzip it,
+and move **Cutout.app** into your Applications folder.
 
-Requires an Apple Silicon Mac running macOS 14 or newer. The target machine
-is an M1 Pro with 16 GB unified memory. One image is processed at a time.
+- **Apple Silicon Mac · macOS 14 or newer.** Intel Macs are not supported by this build.
+- The runtime and two models are bundled, so the download is large. Once installed,
+  image processing works offline.
+- This personal-use build is **ad-hoc signed, not notarized**. macOS may block its
+  first launch. It does not have a verified Developer ID signature.
+- Each release includes `SHA256SUMS` to verify the downloaded ZIP.
 
-## Build
+GitHub's automatic “Source code” archives contain the project, not the ready-to-run app.
 
-Requires Apple's Command Line Tools (or Xcode) and uv. From this directory:
+## Using Cutout
 
-```sh
-./scripts/setup-runtime.sh  # one-time network downloads
-./scripts/build.sh         # builds and ad-hoc signs artifacts/Cutout.app
-open artifacts/Cutout.app
-```
+1. **Open an image.** Drop it into the window, paste with **⌘V**, or use **⌘O**.
+   Cutout acknowledges the import immediately and shows an early original-image
+   preview while preparation continues. Background removal starts automatically.
+2. **Choose a mode.** Start with **Segmentation** for solid objects, clothing,
+   and shoes. Try **Matting** for soft edges and translucent details. Use the **?**
+   control for guidance. Completed results are cached while the image stays open.
+3. **Inspect the edges.** Switch between Original and Cutout, and choose a grid,
+   white, or dark preview background. Pinch or use the magnifiers to zoom;
+   drag or scroll to pan. **Fit** returns to the whole image.
+4. **Crop if needed.** Drag the crop's corners or edges, or move the selection.
+   Done applies it; Cancel discards the edit. Reset restores the full image.
+   Entering crop mode returns to the fitted view.
+5. **Copy or save.** Copy the result with **⌘C**, or save with **⌘S**.
+   The output is a transparent PNG, regardless of the preview background.
 
-The runtime is a bundled, relocatable CPython 3.11 with pinned dependencies.
-The SwiftUI app launches one persistent child process and exchanges JSON over
-anonymous pipes. The worker loads pinned local Python model code directly and
-safetensors weights, without remote-code loading or downloads. Model artifacts
-are SHA-256 verified during setup. Hugging Face offline mode and telemetry
-opt-out are always enabled. There is no HTTP server or upload path.
+Zoom and pan only change the view. Cropping changes the exported dimensions
+without rerunning background removal. The dimensions above the controls show
+that export size.
 
-## Image processing
+### Keyboard shortcuts
 
-Defaults to **ZhengPeng7/BiRefNet** segmentation for solid products. The top-right
-selector switches to **ZhengPeng7/BiRefNet-matting** for soft edges. Switching
-processes each mode once per image and preserves the crop. Completed mode results
-are reused immediately. Cancelling a mode switch restores the last completed
-result; importing another image clears both cached results. The selector is disabled
-while processing or editing a crop. Each launch starts with Segmentation.
-Both checkpoints are bundled offline; only one is loaded in memory at a time.
-Both run at 1024 × 1024 with ImageNet normalization.
-The model predicts continuous alpha, preserving soft edges rather than applying
-a hard binary cutoff. That alpha is resized to the source dimensions and
-multiplied by any existing transparency. The source RGB content is preserved.
-The input's orientation and color profile are normalized to sRGB before inference.
-Exports are always transparent PNG, regardless of the preview background.
+| Action | Shortcut |
+| --- | --- |
+| Open image | ⌘O |
+| Paste image | ⌘V |
+| Copy cutout | ⌘C |
+| Save PNG | ⌘S |
+| Zoom in / out | ⌘= / ⌘− |
+| Fit image to window | ⌘0 |
 
-To inspect edges, pinch to zoom or use the magnifier buttons (⌘= / ⌘−).
-Drag or scroll to pan while zoomed. Click **Fit** or press **⌘0** to show the
-whole image again. The zoom readout is relative to Fit, up to 16×. Switching
-Original/Cutout preserves the view; opening another image or entering crop mode
-resets it. Crop mode uses the fitted image so dragging edits the crop.
-Zoom and pan affect only the preview, never the exported dimensions.
+## Private by design
 
-The Apple GPU uses PyTorch MPS when available; unsupported operations may run
-on the CPU. Metal uses FP16, with deformable convolutions explicitly computed
-in FP32 on the CPU to avoid a very slow CPU FP16 kernel. A CPU-only FP32 path
-works when Metal is unavailable. The app does not
-use Apple's foreground extraction as a silent substitute for BiRefNet.
+Images are processed on your Mac. The app has no upload path or local web server;
+model downloading and telemetry are disabled at runtime. Building from source
+requires a one-time download of the runtime and model dependencies.
 
-Matting is imperfect: fine details, transparent objects, cast shadows and
-background color fringing can need further editing. This app does not relight
-the subject, remove shadows on the subject, or promise remove.bg parity.
-Export dimensions match the source, but matte detail comes from 1024-pixel inference.
-The first frame of animated/multipage files is used. Images over 40 megapixels
-or files over 250 MB are rejected to bound memory use.
+Working images live in a temporary session folder, removed when replaced or
+when Cutout quits normally. Force-quitting can leave temporary files until macOS
+cleans them up. Saved PNGs are written only to the location you choose.
+Runtime diagnostics live at `~/Library/Caches/local.cutout.app/runtime.log`.
 
-## Local data
+## What to expect
 
-Images are held in a private temporary session folder and removed when replaced
-or when the app quits normally. Force-quitting can leave temporary files until
-macOS cleans its temporary directory. Exported files are only written to the
-location you select. Runtime diagnostics are stored at
-`~/Library/Caches/local.cutout.app/runtime.log` (replaced each worker start).
-The app is ad-hoc signed for personal use, not notarized for public distribution.
+Cutout processes one image at a time. The first image after launch also loads the
+model, so it takes longer than subsequent images. It uses the Apple GPU where
+supported, with CPU fallbacks for some operations.
 
-## Source layout
+Fine hair, lace, transparency, and shadows can still need manual editing.
+Output retains the source resolution, but the model estimates the matte at
+1024 × 1024. Files over 250 MB and images over 40 megapixels are rejected.
+Only the first frame of animated or multipage images is used.
 
-- `Sources/`: native SwiftUI UI, image preparation and worker lifecycle
-- `Runtime/worker.py`: local inference and PNG export
-- `Runtime/model-manifest.json`: pinned model revision and checksums
-- `scripts/`: reproducible setup and standalone app packaging
-- `Tests/`: image and end-to-end regression checks
-- `.cache/`, `.build/`, `artifacts/`: ignored generated dependencies and binaries
+For model details and limitations, see [Image processing](docs/IMAGE-PROCESSING.md).
+For setup, testing, and sample performance measurements, see
+[Development](docs/DEVELOPMENT.md).
 
-Third-party notices are in `THIRD_PARTY_NOTICES.md` and bundled package metadata.
+## Project notes
 
-## Validation on the target Mac
+Cutout is a personal project built with SwiftUI, AppKit, and a bundled Python
+inference worker. It uses BiRefNet and BiRefNet-matting by Peng Zheng and
+collaborators. See [third-party notices](THIRD_PARTY_NOTICES.md) for model,
+runtime, and dependency attributions.
 
-Tested on 22 September 2026 with the public dog photograph from
-https://github.com/pytorch/hub/blob/master/images/dog.jpg (1546 × 1213).
-This test image is not bundled in the app.
-
-- MPS mixed precision: 9.40 seconds for the first inference and 8.25 seconds
-  for a second image in the same worker, excluding initial Python/model startup.
-- `time -l` reported a peak memory footprint of 7.19 GB (6.70 GiB) across that run.
-- CPU FP32 reference: 14.34 seconds for inference.
-- Mixed-precision alpha differed from the CPU reference by 0.0103/255 on average;
-  the largest per-pixel difference was 3/255 on this image.
-- Native UI import, clipboard copy/paste and transparent PNG export were checked.
-- Integration tests passed for automatic file drop processing, cancellation,
-  restart/retry, and invalid-image recovery retaining the previous result.
-- Unit checks cover soft-alpha composition, existing transparency, orientation,
-  malformed worker requests and invalid image data.
-
-Run the unit checks with `./scripts/test.sh`. For the full local runtime test:
-
-```sh
-./scripts/test-integration.sh /absolute/path/to/test-dog.jpg
-```
-
-These are sample measurements, not a guarantee for all images or system loads.
+Found a problem? [Open an issue](https://github.com/ericfzhu/cutout/issues/new)
+with your macOS version, Mac model, and steps to reproduce it. Include an example
+image only if you are comfortable sharing it publicly.
