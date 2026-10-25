@@ -34,3 +34,14 @@ Export dimensions match the source, but matte detail comes from 1024-pixel infer
 The first frame of animated/multipage files is used. Images over 40 megapixels
 or files over 250 MB are rejected to bound memory use.
 
+## Local data
+
+Images are processed on your Mac. The app has no upload path or local web server;
+model downloading and telemetry are disabled at runtime. Building from source
+requires a one-time download of the runtime and model dependencies.
+
+Working images live in a temporary session folder, removed when replaced or
+when Cutout quits normally. Force-quitting can leave temporary files until macOS
+cleans them up. Saved PNGs are written only to the location you choose.
+Runtime diagnostics live at `~/Library/Caches/local.cutout.app/runtime.log`.
+
