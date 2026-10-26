@@ -4,7 +4,7 @@
 
 First release. Apple Silicon · macOS 14+.
 
-- Offline segmentation and matting with early image previews.
+- Offline Segmentation and Matting modes with early image previews.
 - Original/Cutout comparison, zoom, pan, and Fit.
 - Reversible cropping and transparent PNG copy/export.
 - Cached results, cancellation, and retry.
