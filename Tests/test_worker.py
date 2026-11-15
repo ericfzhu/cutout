@@ -50,6 +50,16 @@ class WorkerTests(unittest.TestCase):
             self.assertTrue((actual[:, 10:, 3] == 128).all())
             self.assertFalse(Path(str(output) + ".partial").exists())
 
+    def test_auto_crop_uses_alpha_bounds_and_clips_padding(self):
+        alpha = Image.new("L", (200, 120))
+        self.assertIsNone(worker.suggested_crop(alpha))
+        alpha.paste(128, (4, 31, 152, 118))
+        alpha.putpixel((199, 0), 1)
+        self.assertEqual(worker.suggested_crop(alpha), [0, 15, 168, 120])
+        faint = Image.new("L", (100, 100))
+        faint.putpixel((50, 48), 1)
+        self.assertEqual(worker.suggested_crop(faint), [34, 32, 67, 65])
+
     def test_protocol_survives_malformed_requests(self):
         import json
         process = subprocess.run(

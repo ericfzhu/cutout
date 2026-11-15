@@ -23,6 +23,16 @@ def emit(**event):
     PROTOCOL.flush()
 
 
+def suggested_crop(alpha, margin=16):
+    # Ignore nearly invisible mask speckles, but preserve a uniformly faint subject.
+    bounds = alpha.point([0] * 4 + [255] * 252).getbbox() or alpha.getbbox()
+    if bounds is None:
+        return None
+    left, top, right, bottom = bounds
+    return [max(0, left - margin), max(0, top - margin),
+            min(alpha.width, right + margin), min(alpha.height, bottom + margin)]
+
+
 class Engine:
     def __init__(self, mode="segmentation"):
         if mode not in ("segmentation", "matting"):
@@ -89,7 +99,9 @@ class Engine:
         matte = matte.resize(original.size, Image.Resampling.LANCZOS)
         alpha = np.asarray(original.getchannel("A"), dtype=np.uint16)
         combined = (np.asarray(matte, dtype=np.uint16) * alpha + 127) // 255
-        original.putalpha(Image.fromarray(combined.astype(np.uint8)))
+        final_alpha = Image.fromarray(combined.astype(np.uint8))
+        crop = suggested_crop(final_alpha)
+        original.putalpha(final_alpha)
         temporary = str(destination) + ".partial"
         original.save(temporary, format="PNG")
         os.replace(temporary, destination)
@@ -98,7 +110,7 @@ class Engine:
         gc.collect()
         if self.device == "mps":
             torch.mps.empty_cache()
-        return seconds
+        return seconds, crop
 
 
 def main():
@@ -125,9 +137,9 @@ def main():
                     emit(id=request_id, event="status", message="Loading " + mode + "…")
                     engine = Engine(mode)
                 emit(id=request_id, event="status", message="Removing background…")
-                seconds = engine.remove(request["input"], request["output"])
+                seconds, crop = engine.remove(request["input"], request["output"])
             emit(id=request_id, event="complete", output=request["output"],
-                 seconds=round(seconds, 2), device=engine.device)
+                 seconds=round(seconds, 2), device=engine.device, crop=crop)
         except Exception as error:
             traceback.print_exc(file=sys.stderr)
             emit(id=request.get("id", ""), event="error", message=str(error))

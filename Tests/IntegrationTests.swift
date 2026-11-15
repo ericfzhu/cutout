@@ -32,6 +32,21 @@ struct IntegrationTests {
         print("PASS: file drop automatically produces an original-size cutout")
 
         let segmentation = model.result!.tiffRepresentation!
+        model.showOriginal = true
+        model.beginCrop()
+        model.suggestCrop()
+        precondition(model.cropping && !model.showOriginal && model.error == nil)
+        precondition(model.crop == CropGeometry.full && model.draftCrop != CropGeometry.full,
+                     "Auto Crop should suggest a tighter frame without applying it")
+        let suggested = model.draftCrop
+        model.cropping = false // Cancel the draft, then reopen it.
+        model.beginCrop()
+        model.suggestCrop()
+        model.applyCrop()
+        precondition(model.crop == suggested && !model.cropping)
+        model.resetCrop()
+        precondition(model.crop == CropGeometry.full && !model.busy)
+        print("PASS: Auto Crop suggests an editable frame and supports cancel, apply, and reset")
         model.crop = CGRect(x: 0.1, y: 0.1, width: 0.8, height: 0.8)
         let savedCrop = model.crop
         model.selectMode(.matting)

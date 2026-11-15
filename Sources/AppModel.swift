@@ -30,8 +30,20 @@ final class AppModel: ObservableObject {
 
     func beginCrop() {
         guard !busy, result != nil else { return }
+        showOriginal = false
         draftCrop = crop
         cropping = true
+    }
+
+    private var suggestedCrops: [RemovalMode: CGRect] = [:]
+
+    func suggestCrop() {
+        guard cropping, !busy, result != nil else { return }
+        guard let suggestion = suggestedCrops[removalMode] else {
+            error = "No visible subject was found to crop."
+            return
+        }
+        draftCrop = suggestion
     }
 
     func applyCrop() {
@@ -192,6 +204,7 @@ final class AppModel: ObservableObject {
                 activeFolder = folder
                 sourceURL = source
                 resultURL = nil
+                suggestedCrops.removeAll()
                 completedResults.removeAll()
                 lastCompletedMode = nil
                 original = NSImage(contentsOf: source)
@@ -273,6 +286,15 @@ final class AppModel: ObservableObject {
             guard let resultURL, let image = NSImage(contentsOf: resultURL) else {
                 fail("The finished image couldn’t be opened. Please try again."); return
             }
+            if let edges = event["crop"] as? [Int], edges.count == 4,
+               pixelSize.width > 0, pixelSize.height > 0 {
+                suggestedCrops[removalMode] = CGRect(
+                    x: CGFloat(edges[0]) / pixelSize.width, y: CGFloat(edges[1]) / pixelSize.height,
+                    width: CGFloat(edges[2] - edges[0]) / pixelSize.width,
+                    height: CGFloat(edges[3] - edges[1]) / pixelSize.height)
+            } else {
+                suggestedCrops.removeValue(forKey: removalMode)
+            }
             completedResults[removalMode] = resultURL
             lastCompletedMode = removalMode
             result = image
@@ -313,6 +335,7 @@ final class AppModel: ObservableObject {
         original = nil
         result = nil
         sourceURL = nil
+        suggestedCrops.removeAll()
         resultURL = nil
         completedResults.removeAll()
         lastCompletedMode = nil

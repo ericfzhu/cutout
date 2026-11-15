@@ -274,6 +274,9 @@ struct ContentView: View {
                     .padding(.leading, 8)
                 Divider().frame(height: 23).padding(.horizontal, 5)
                 if model.cropping {
+                    Button("Auto Crop", action: model.suggestCrop)
+                        .buttonStyle(CutoutButtonStyle())
+                        .help("Fit the crop frame around the subject with a 16-pixel margin.")
                     Button("Reset") { model.draftCrop = CropGeometry.full }
                         .buttonStyle(CutoutButtonStyle())
                     Button("Cancel") { model.cropping = false }
@@ -286,10 +289,7 @@ struct ContentView: View {
                             .buttonStyle(CutoutButtonStyle())
                             .help("Reset crop").accessibilityLabel("Reset crop")
                     }
-                    Button(action: {
-                        model.showOriginal = false
-                        model.beginCrop()
-                    }) { Label("Crop", systemImage: "crop") }
+                    Button(action: model.beginCrop) { Label("Crop", systemImage: "crop") }
                         .buttonStyle(CutoutButtonStyle())
                     Button(action: model.copyResult) {
                         Label(model.copied ? "Copied" : "Copy", systemImage: model.copied ? "checkmark" : "doc.on.doc")
